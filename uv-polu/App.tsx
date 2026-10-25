@@ -1,5 +1,3 @@
-
-
 import {
   Cinzel_500Medium,
   Cinzel_600SemiBold,
@@ -13,7 +11,7 @@ import {
 } from '@expo-google-fonts/cormorant-garamond'
 import { useFonts } from 'expo-font'
 import { StatusBar } from 'expo-status-bar'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BottomNav, NAV_HEIGHT } from './src/components/BottomNav'
@@ -33,9 +31,12 @@ import { GuildScreen } from './src/screens/GuildScreen'
 import { HomeScreen } from './src/screens/HomeScreen'
 import { QuestsScreen } from './src/screens/QuestsScreen'
 import { StoryScreen } from './src/screens/StoryScreen'
+import { buildStoryContext, fallbackStory, fetchStory, type Story } from './src/story'
 import { ThemeContext, themes } from './src/theme'
 import { fetchLiveWeather, type LiveWeather } from './src/weather'
+
 const REFRESH_MS = 10 * 60 * 1000
+
 export default function App() {
   const [fontsLoaded] = useFonts({
     Cinzel_500Medium,
@@ -70,6 +71,12 @@ function Game() {
   const [encouraged, setEncouraged] = useState<string[]>([])
   const [live, setLive] = useState<LiveWeather | null>(null)
   const [ready, setReady] = useState(false) // first fetch attempt finished
+  const [bleConnected, setBleConnected] = useState(false)
+  const [story, setStory] = useState<Story | null>(null)
+  const [storyLoading, setStoryLoading] = useState(true)
+
+  // Readings start at the defaults. Live weather (SerpApi) and the ESP32 update them below.
+  const [readings, setReadings] = useState<Readings>(initialReadings)
 
   // Load live weather (from the Supabase edge function) on mount, then on a timer.
   useEffect(() => {
@@ -92,78 +99,107 @@ function Game() {
     }
   }, [])
 
-  // temp + precipitation come from the live data; UV and air keep their
-  // defaults until the ESP32 supplies them.
- const [readings, setReadings] = useState<Readings>({
-  ...initialReadings,
-  temp: initialReadings.temp,
-  precipitation: initialReadings.precipitation,
-})
+  // Merge live weather into the readings: precipitation always comes from live data,
+  // and temperature does too unless the ESP32 is connected and supplying it.
+  useEffect(() => {
+    if (!live) return
+    setReadings((current) => ({
+      ...current,
+      precipitation: live.precipitation,
+      ...(bleConnected ? {} : { temp: live.temp }),
+    }))
+  }, [live, bleConnected])
 
   // The background/kingdom is derived, never stored.
   const weather = weatherFor(readings.temp, readings.precipitation)
-const history = buildHistory(readings)
-  const [bleConnected, setBleConnected] = useState(false)
-const theme = themes[weather]
+  const history = useMemo(() => buildHistory(readings), [readings])
+  const theme = themes[weather]
 
+  // Everything the story depends on: character, weather, UV, villain, activity level, day.
+  const ctx = useMemo(() => buildStoryContext(selected, weather, readings), [selected, weather, readings])
 
-
-const connectBLE = async () => {
-  try {
-    const bluetooth = (navigator as any).bluetooth
-    if (!bluetooth) {
-      alert('Web Bluetooth is not supported. Please use Chrome.')
-      return
-    }
-
-    const SERVICE = '12345678-1234-1234-1234-123456789abc'
-    const CHAR = '87654321-4321-4321-4321-cba987654321'
-
-    const device = await bluetooth.requestDevice({
-      filters: [{ name: 'Sunlit Kingdom' }],
-      optionalServices: [SERVICE],
-    })
-    console.log('Found:', device.name, device.id)
-
-    const applyData = (data: string) => {
-      console.log('🔵 ESP32 RAW:', data)
-      const [uv, temp, humidity, air] = data.split(',').map(Number)
-      if ([uv, temp, humidity, air].some(Number.isNaN)) return
-      setReadings((current) => ({ ...current, uv, temp, humidity, air }))
-    }
-
-    const subscribe = async () => {
-      const server = await device.gatt.connect()
-      const service = await server.getPrimaryService(SERVICE)
-      const characteristic = await service.getCharacteristic(CHAR)
-      characteristic.addEventListener('characteristicvaluechanged', (event: any) => {
-        applyData(new TextDecoder().decode(event.target.value))
+  // Generate a new story whenever that context changes (cached server-side, so repeats are free).
+  // Step 5: the result is only logged for now. The screens don't use it yet.
+  useEffect(() => {
+    if (!ready) return
+    let cancelled = false
+    setStory(null)
+    setStoryLoading(true)
+    fetchStory(ctx)
+      .then((s) => {
+        console.log('[story]', s.source, '-', s.title)
+        if (!cancelled) setStory(s)
       })
-      await characteristic.startNotifications()
-      applyData(new TextDecoder().decode(await characteristic.readValue()))
-      setBleConnected(true)
+      .catch((err) => {
+        console.warn('Muse story unavailable, using the built-in tale', err)
+        if (!cancelled) setStory(fallbackStory(ctx))
+      })
+      .finally(() => {
+        if (!cancelled) setStoryLoading(false)
+      })
+    return () => {
+      cancelled = true
     }
+    // ctx.key already captures every input that should trigger a new story
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, ctx.key])
 
-    device.addEventListener('gattserverdisconnected', async () => {
-      console.log('🔴 BLE disconnected, retrying...')
-      setBleConnected(false)
-      for (let i = 0; i < 5; i++) {
-        try {
-          await new Promise((r) => setTimeout(r, 2000))
-          await subscribe()
-          return
-        } catch (e) {
-          console.log('retry failed', e)
-        }
+  const connectBLE = async () => {
+    try {
+      const bluetooth = (navigator as any).bluetooth
+      if (!bluetooth) {
+        alert('Web Bluetooth is not supported. Please use Chrome.')
+        return
       }
-    })
 
-    await subscribe()
-    console.log('✅ BLE CONNECTED')
-  } catch (error) {
-    console.error('BLE ERROR:', error)
+      const SERVICE = '12345678-1234-1234-1234-123456789abc'
+      const CHAR = '87654321-4321-4321-4321-cba987654321'
+
+      const device = await bluetooth.requestDevice({
+        filters: [{ name: 'Sunlit Kingdom' }],
+        optionalServices: [SERVICE],
+      })
+      console.log('Found:', device.name, device.id)
+
+      const applyData = (data: string) => {
+        console.log('🔵 ESP32 RAW:', data)
+        const [uv, temp, humidity, air] = data.split(',').map(Number)
+        if ([uv, temp, humidity, air].some(Number.isNaN)) return
+        setReadings((current) => ({ ...current, uv, temp, humidity, air }))
+      }
+
+      const subscribe = async () => {
+        const server = await device.gatt.connect()
+        const service = await server.getPrimaryService(SERVICE)
+        const characteristic = await service.getCharacteristic(CHAR)
+        characteristic.addEventListener('characteristicvaluechanged', (event: any) => {
+          applyData(new TextDecoder().decode(event.target.value))
+        })
+        await characteristic.startNotifications()
+        applyData(new TextDecoder().decode(await characteristic.readValue()))
+        setBleConnected(true)
+      }
+
+      device.addEventListener('gattserverdisconnected', async () => {
+        console.log('🔴 BLE disconnected, retrying...')
+        setBleConnected(false)
+        for (let i = 0; i < 5; i++) {
+          try {
+            await new Promise((r) => setTimeout(r, 2000))
+            await subscribe()
+            return
+          } catch (e) {
+            console.log('retry failed', e)
+          }
+        }
+      })
+
+      await subscribe()
+      console.log('✅ BLE CONNECTED')
+    } catch (error) {
+      console.error('BLE ERROR:', error)
+    }
   }
-}
 
   // Avoid flashing the default "sunny" world before the first fetch finishes.
   if (!ready) return <View style={styles.loading} />
@@ -266,6 +302,7 @@ const connectBLE = async () => {
     </ThemeContext.Provider>
   )
 }
+
 const styles = StyleSheet.create({
   flex: { flex: 1 },
 
