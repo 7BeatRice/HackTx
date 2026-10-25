@@ -67,20 +67,23 @@ export const weatherCopy: Record<Weather, { kingdom: string; condition: string; 
 
 export const initialReadings: Readings = { temp: 24, uv: 3, air: 92, precipitation: 12 }
 
+/** Which kingdom a temperature (°C) and precipitation chance (%) belong to. */
+export function weatherFor(temp: number, precipitation: number): Weather {
+  return temp >= 16
+    ? precipitation < 45
+      ? 'sunny'
+      : 'bright-clouds'
+    : precipitation >= 45
+      ? 'winter-storm'
+      : 'dark-clouds'
+}
+
 /** Simulator: roll a fresh set of readings and derive the matching weather. */
 export function rollWorld(): { weather: Weather; readings: Readings } {
   const temp = Math.round(-4 + Math.random() * 34)
   const precipitation = Math.round(Math.random() * 100)
-  const weather: Weather =
-    temp >= 16
-      ? precipitation < 45
-        ? 'sunny'
-        : 'bright-clouds'
-      : precipitation >= 45
-        ? 'winter-storm'
-        : 'dark-clouds'
   return {
-    weather,
+    weather: weatherFor(temp, precipitation),
     readings: {
       temp,
       uv: Math.round(1 + Math.random() * 6),

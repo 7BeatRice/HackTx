@@ -11,7 +11,7 @@ import {
 } from '@expo-google-fonts/cormorant-garamond'
 import { useFonts } from 'expo-font'
 import { StatusBar } from 'expo-status-bar'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BottomNav, NAV_HEIGHT } from './src/components/BottomNav'
@@ -22,6 +22,7 @@ import {
   initialReadings,
   rollWorld,
   weatherCopy,
+  weatherFor,
   type History,
   type Readings,
   type Screen,
@@ -34,6 +35,7 @@ import { HomeScreen } from './src/screens/HomeScreen'
 import { QuestsScreen } from './src/screens/QuestsScreen'
 import { StoryScreen } from './src/screens/StoryScreen'
 import { ThemeContext, themes } from './src/theme'
+import { fetchLiveWeather } from './src/weather'
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -75,12 +77,31 @@ function Game() {
 
   const theme = themes[weather]
 
-  const refreshWorld = () => {
-    const next = rollWorld()
+  const applyWorld = (next: { weather: Weather; readings: Readings }) => {
     setWeather(next.weather)
     setReadings(next.readings)
     setHistory(buildHistory(next.readings))
   }
+
+  // Live mode: temperature and precipitation come from SerpApi. UV and air
+  // quality aren't in SerpApi's weather result, so they keep their last values
+  // until the ESP32 supplies them.
+  const loadLiveWorld = async () => {
+    try {
+      const live = await fetchLiveWeather()
+      const next = { ...readings, temp: live.temp, precipitation: live.precipitation }
+      applyWorld({ weather: weatherFor(next.temp, next.precipitation), readings: next })
+    } catch (err) {
+      console.warn('Live weather unavailable, keeping current readings', err)
+    }
+  }
+
+  const refreshWorld = () => (simulator ? applyWorld(rollWorld()) : loadLiveWorld())
+
+  useEffect(() => {
+    if (!simulator) loadLiveWorld()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [simulator])
 
   if (screen === 'characters') {
     return (
