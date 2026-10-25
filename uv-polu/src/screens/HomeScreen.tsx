@@ -5,6 +5,7 @@ import { ChamferBox } from '../components/ChamferBox'
 import { Icon } from '../components/Icon'
 import { TrendChart } from '../components/TrendChart'
 import { WorldScene } from '../components/WorldScene'
+import type { LiveWeather } from '../weather'
 import {
   fahrenheit,
   heroClassFor,
@@ -24,13 +25,12 @@ type Props = {
   readings: Readings
   history: History
   selected: Character
-  simulator: boolean
+  live: LiveWeather | null   
   message: number
-  onRefresh: () => void
-  onOpenStory: () => void
+  onOpenStory: () => void  
 }
 
-export function HomeScreen({ weather, readings, history, selected, simulator, message, onRefresh, onOpenStory }: Props) {
+export function HomeScreen({ weather, readings, history, selected, live, message, onOpenStory }: Props) {
   const theme = useTheme()
   const { width, height, compact, tiny, pad } = useMetrics()
   const copy = weatherCopy[weather]
@@ -145,14 +145,6 @@ export function HomeScreen({ weather, readings, history, selected, simulator, me
             <Text style={[styles.headingKicker, { color: theme.gold }]}>YOUR WORLD RIGHT NOW</Text>
             <Text style={[styles.headingTitle, { color: theme.ink }]}>{copy.condition}</Text>
           </View>
-          <Pressable
-            onPress={onRefresh}
-            accessibilityRole="button"
-            accessibilityLabel="Refresh simulator readings"
-            style={styles.refresh}
-          >
-            <Icon name="refresh" size={18} color="#738274" />
-          </Pressable>
         </View>
 
         <View style={[styles.grid, { gap }]}>
@@ -207,9 +199,9 @@ export function HomeScreen({ weather, readings, history, selected, simulator, me
         <View style={styles.note}>
           <Icon name="signal" size={18} color="#6f7e6d" />
           <Text style={styles.noteText}>
-            {simulator ? 'Simulator is creating a safe practice world' : 'Connected to your adventure beacon'}
+            {live ? `Live weather · ${live.location}` : 'Live weather unavailable — showing default world'}
           </Text>
-          <Text style={styles.noteTag}>{simulator ? 'SIMULATOR' : 'ESP32'}</Text>
+          <Text style={styles.noteTag}>{live ? 'LIVE' : 'OFFLINE'}</Text>
         </View>
       </View>
     </>
@@ -289,16 +281,6 @@ const styles = StyleSheet.create({
   headingText: { flex: 1, paddingRight: 12 },
   headingKicker: { fontFamily: font.cinzel, fontSize: 9, letterSpacing: 1.44, marginBottom: 5 },
   headingTitle: { fontFamily: font.cinzel, fontSize: 21 },
-  refresh: {
-    width: 34,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#dde2d8',
-    borderRadius: 17,
-    backgroundColor: '#ffffff',
-  },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   trendHead: { marginTop: 26, marginBottom: 14 },
   card: { flexDirection: 'row', alignItems: 'center', minHeight: 88 },

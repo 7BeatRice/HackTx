@@ -81,20 +81,7 @@ export function weatherFor(temp: number, precipitation: number): Weather {
       : 'dark-clouds'
 }
 
-/** Simulator: roll a fresh set of readings and derive the matching weather. */
-export function rollWorld(): { weather: Weather; readings: Readings } {
-  const temp = Math.round(-4 + Math.random() * 34)
-  const precipitation = Math.round(Math.random() * 100)
-  return {
-    weather: weatherFor(temp, precipitation),
-    readings: {
-      temp,
-      uv: Math.round(1 + Math.random() * 6),
-      air: Math.round(82 + Math.random() * 16),
-      precipitation,
-    },
-  }
-}
+
 
 export function heroClassFor(weather: Weather): string {
   return weather === 'sunny'

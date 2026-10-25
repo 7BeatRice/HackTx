@@ -11,7 +11,7 @@ import {
 } from '@expo-google-fonts/cormorant-garamond'
 import { useFonts } from 'expo-font'
 import { StatusBar } from 'expo-status-bar'
-import { useEffect, useState } from 'react'
+import { useEffect,useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BottomNav, NAV_HEIGHT } from './src/components/BottomNav'
@@ -20,13 +20,10 @@ import {
   buildHistory,
   characters,
   initialReadings,
-  rollWorld,
   weatherCopy,
   weatherFor,
-  type History,
   type Readings,
   type Screen,
-  type Weather,
 } from './src/data'
 import { MotionContext, useReduceMotion } from './src/hooks'
 import { CharacterSelectScreen } from './src/screens/CharacterSelectScreen'
@@ -35,8 +32,8 @@ import { HomeScreen } from './src/screens/HomeScreen'
 import { QuestsScreen } from './src/screens/QuestsScreen'
 import { StoryScreen } from './src/screens/StoryScreen'
 import { ThemeContext, themes } from './src/theme'
-import { fetchLiveWeather } from './src/weather'
-
+import { fetchLiveWeather, type LiveWeather } from './src/weather'
+const REFRESH_MS = 10 * 60 * 1000
 export default function App() {
   const [fontsLoaded] = useFonts({
     Cinzel_500Medium,
@@ -63,46 +60,54 @@ export default function App() {
 function Game() {
   const insets = useSafeAreaInsets()
 
-  // State carried over unchanged from the web prototype.
-  const [simulator, setSimulator] = useState(true)
   const [message, setMessage] = useState(0)
   const [screen, setScreen] = useState<Screen>('home')
   const [selected, setSelected] = useState(characters[0])
-  const [weather, setWeather] = useState<Weather>('sunny')
   const [storyChoice, setStoryChoice] = useState<string>()
   const [completedQuests, setCompletedQuests] = useState<string[]>([])
   const [encouraged, setEncouraged] = useState<string[]>([])
-  const [readings, setReadings] = useState<Readings>(initialReadings)
-  const [history, setHistory] = useState<History>(() => buildHistory(initialReadings))
+  const [live, setLive] = useState<LiveWeather | null>(null)
+  const [ready, setReady] = useState(false) // first fetch attempt finished
 
+  // Load live weather (from the Supabase edge function) on mount, then on a timer.
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const data = await fetchLiveWeather()
+        if (!cancelled) setLive(data)
+      } catch (err) {
+        console.warn('Live weather unavailable, keeping current readings', err)
+      } finally {
+        if (!cancelled) setReady(true)
+      }
+    }
+    load()
+    const id = setInterval(load, REFRESH_MS)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
+  }, [])
+
+  // temp + precipitation come from the live data; UV and air keep their
+  // defaults until the ESP32 supplies them.
+  const readings = useMemo<Readings>(
+    () => ({
+      ...initialReadings,
+      temp: live?.temp ?? initialReadings.temp,
+      precipitation: live?.precipitation ?? initialReadings.precipitation,
+    }),
+    [live],
+  )
+
+  // The background/kingdom is derived, never stored.
+  const weather = weatherFor(readings.temp, readings.precipitation)
+  const history = useMemo(() => buildHistory(readings), [readings])
   const theme = themes[weather]
 
-  const applyWorld = (next: { weather: Weather; readings: Readings }) => {
-    setWeather(next.weather)
-    setReadings(next.readings)
-    setHistory(buildHistory(next.readings))
-  }
-
-  // Live mode: temperature and precipitation come from SerpApi. UV and air
-  // quality aren't in SerpApi's weather result, so they keep their last values
-  // until the ESP32 supplies them.
-  const loadLiveWorld = async () => {
-    try {
-      const live = await fetchLiveWeather()
-      const next = { ...readings, temp: live.temp, precipitation: live.precipitation }
-      applyWorld({ weather: weatherFor(next.temp, next.precipitation), readings: next })
-    } catch (err) {
-      console.warn('Live weather unavailable, keeping current readings', err)
-    }
-  }
-
-  const refreshWorld = () => (simulator ? applyWorld(rollWorld()) : loadLiveWorld())
-
-  useEffect(() => {
-    if (!simulator) loadLiveWorld()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [simulator])
-
+  // Avoid flashing the default "sunny" world before the first fetch finishes.
+  if (!ready) return <View style={styles.loading} />
   if (screen === 'characters') {
     return (
       <ThemeContext.Provider value={theme}>
@@ -131,25 +136,22 @@ function Game() {
           showsVerticalScrollIndicator={false}
         >
           <TopBar
-            kingdom={weatherCopy[weather].kingdom}
-            selected={selected}
-            simulator={simulator}
-            onAvatar={() => setScreen('characters')}
-            onToggleSim={() => setSimulator(!simulator)}
-          />
-
-          {screen === 'home' && (
-            <HomeScreen
-              weather={weather}
-              readings={readings}
-              history={history}
+              kingdom={weatherCopy[weather].kingdom}
               selected={selected}
-              simulator={simulator}
-              message={message}
-              onRefresh={refreshWorld}
-              onOpenStory={() => setScreen('story')}
+              onAvatar={() => setScreen('characters')}
             />
-          )}
+
+            {screen === 'home' && (
+              <HomeScreen
+                weather={weather}
+                readings={readings}
+                history={history}
+                selected={selected}
+                live={live}
+                message={message}
+                onOpenStory={() => setScreen('story')}
+              />
+            )}
 
           {screen === 'story' && (
             <StoryScreen

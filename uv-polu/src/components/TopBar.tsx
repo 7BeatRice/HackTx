@@ -7,17 +7,12 @@ import { alpha, font, mix, useTheme } from '../theme'
 type Props = {
   kingdom: string
   selected: Character
-  simulator: boolean
   onAvatar: () => void
-  onToggleSim: () => void
 }
 
-export function TopBar({ kingdom, selected, simulator, onAvatar, onToggleSim }: Props) {
+export function TopBar({ kingdom, selected, onAvatar }: Props) {
   const theme = useTheme()
   const insets = useSafeAreaInsets()
-  const pill = simulator
-    ? { bg: '#f7f0df', border: '#e7d4a7', text: '#8b6b28', dot: '#d39d31', ring: 'rgba(211,157,49,0.12)' }
-    : { bg: '#eff8f0', border: '#ccdad0', text: '#346248', dot: '#47a46a', ring: 'rgba(71,164,106,0.12)' }
 
   return (
     <View
@@ -57,17 +52,6 @@ export function TopBar({ kingdom, selected, simulator, onAvatar, onToggleSim }: 
         ]}
       >
         <Text style={styles.avatarText}>{selected.initial}</Text>
-      </Pressable>
-
-      <Pressable
-        onPress={onToggleSim}
-        accessibilityRole="switch"
-        accessibilityLabel="Toggle simulator mode"
-        accessibilityState={{ checked: simulator }}
-        style={[styles.pill, { backgroundColor: pill.bg, borderColor: pill.border }]}
-      >
-        <View style={[styles.dot, { backgroundColor: pill.dot, boxShadow: `0 0 0 3px ${pill.ring}` }]} />
-        <Text style={[styles.pillText, { color: pill.text }]}>{simulator ? 'SIM' : 'LIVE'}</Text>
       </Pressable>
     </View>
   )
@@ -111,15 +95,4 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '45deg' }],
   },
   avatarText: { fontFamily: font.cinzelBold, fontSize: 16, color: '#ffffff', transform: [{ rotate: '-45deg' }] },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderRadius: 20,
-  },
-  dot: { width: 7, height: 7, borderRadius: 4 },
-  pillText: { fontFamily: font.bodyBold, fontSize: 10, letterSpacing: 0.8 },
 })
