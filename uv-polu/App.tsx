@@ -1,3 +1,5 @@
+
+
 import {
   Cinzel_500Medium,
   Cinzel_600SemiBold,
@@ -11,8 +13,8 @@ import {
 } from '@expo-google-fonts/cormorant-garamond'
 import { useFonts } from 'expo-font'
 import { StatusBar } from 'expo-status-bar'
-import { useEffect,useMemo, useState } from 'react'
-import { ScrollView, StyleSheet, View } from 'react-native'
+import { useEffect, useState } from 'react'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BottomNav, NAV_HEIGHT } from './src/components/BottomNav'
 import { TopBar } from './src/components/TopBar'
@@ -92,22 +94,80 @@ function Game() {
 
   // temp + precipitation come from the live data; UV and air keep their
   // defaults until the ESP32 supplies them.
-  const readings = useMemo<Readings>(
-    () => ({
-      ...initialReadings,
-      temp: live?.temp ?? initialReadings.temp,
-      precipitation: live?.precipitation ?? initialReadings.precipitation,
-    }),
-    [live],
-  )
+ const [readings, setReadings] = useState<Readings>({
+  ...initialReadings,
+  temp: initialReadings.temp,
+  precipitation: initialReadings.precipitation,
+})
 
   // The background/kingdom is derived, never stored.
   const weather = weatherFor(readings.temp, readings.precipitation)
-  const history = useMemo(() => buildHistory(readings), [readings])
-  const theme = themes[weather]
+const history = buildHistory(readings)
+  const [bleConnected, setBleConnected] = useState(false)
+const theme = themes[weather]
+
+
+
+const connectBLE = async () => {
+  try {
+    const bluetooth = (navigator as any).bluetooth
+    if (!bluetooth) {
+      alert('Web Bluetooth is not supported. Please use Chrome.')
+      return
+    }
+
+    const SERVICE = '12345678-1234-1234-1234-123456789abc'
+    const CHAR = '87654321-4321-4321-4321-cba987654321'
+
+    const device = await bluetooth.requestDevice({
+      filters: [{ name: 'Sunlit Kingdom' }],
+      optionalServices: [SERVICE],
+    })
+    console.log('Found:', device.name, device.id)
+
+    const applyData = (data: string) => {
+      console.log('🔵 ESP32 RAW:', data)
+      const [uv, temp, humidity, air] = data.split(',').map(Number)
+      if ([uv, temp, humidity, air].some(Number.isNaN)) return
+      setReadings((current) => ({ ...current, uv, temp, humidity, air }))
+    }
+
+    const subscribe = async () => {
+      const server = await device.gatt.connect()
+      const service = await server.getPrimaryService(SERVICE)
+      const characteristic = await service.getCharacteristic(CHAR)
+      characteristic.addEventListener('characteristicvaluechanged', (event: any) => {
+        applyData(new TextDecoder().decode(event.target.value))
+      })
+      await characteristic.startNotifications()
+      applyData(new TextDecoder().decode(await characteristic.readValue()))
+      setBleConnected(true)
+    }
+
+    device.addEventListener('gattserverdisconnected', async () => {
+      console.log('🔴 BLE disconnected, retrying...')
+      setBleConnected(false)
+      for (let i = 0; i < 5; i++) {
+        try {
+          await new Promise((r) => setTimeout(r, 2000))
+          await subscribe()
+          return
+        } catch (e) {
+          console.log('retry failed', e)
+        }
+      }
+    })
+
+    await subscribe()
+    console.log('✅ BLE CONNECTED')
+  } catch (error) {
+    console.error('BLE ERROR:', error)
+  }
+}
 
   // Avoid flashing the default "sunny" world before the first fetch finishes.
   if (!ready) return <View style={styles.loading} />
+
   if (screen === 'characters') {
     return (
       <ThemeContext.Provider value={theme}>
@@ -128,30 +188,39 @@ function Game() {
   return (
     <ThemeContext.Provider value={theme}>
       <StatusBar style={theme.dark ? 'light' : 'dark'} />
+
       <View style={[styles.flex, { backgroundColor: theme.paper }]}>
-        {/* key resets scroll position when switching tabs */}
+        <Pressable onPress={connectBLE} style={styles.bleButton}>
+          <Text style={styles.bleButtonText}>
+            {bleConnected ? '🟢 ESP32 Connected' : '🔵 Connect ESP32'}
+          </Text>
+        </Pressable>
+
         <ScrollView
           key={screen}
-          contentContainerStyle={{ flexGrow: 1, paddingBottom: NAV_HEIGHT + 10 + insets.bottom }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            paddingBottom: NAV_HEIGHT + 10 + insets.bottom,
+          }}
           showsVerticalScrollIndicator={false}
         >
           <TopBar
-              kingdom={weatherCopy[weather].kingdom}
-              selected={selected}
-              onAvatar={() => setScreen('characters')}
-            />
+            kingdom={weatherCopy[weather].kingdom}
+            selected={selected}
+            onAvatar={() => setScreen('characters')}
+          />
 
-            {screen === 'home' && (
-              <HomeScreen
-                weather={weather}
-                readings={readings}
-                history={history}
-                selected={selected}
-                live={live}
-                message={message}
-                onOpenStory={() => setScreen('story')}
-              />
-            )}
+          {screen === 'home' && (
+            <HomeScreen
+              weather={weather}
+              readings={readings}
+              history={history}
+              selected={selected}
+              live={live}
+              message={message}
+              onOpenStory={() => setScreen('story')}
+            />
+          )}
 
           {screen === 'story' && (
             <StoryScreen
@@ -170,7 +239,11 @@ function Game() {
               readings={readings}
               completedQuests={completedQuests}
               onToggle={(id) =>
-                setCompletedQuests((done) => (done.includes(id) ? done.filter((q) => q !== id) : [...done, id]))
+                setCompletedQuests((done) =>
+                  done.includes(id)
+                    ? done.filter((q) => q !== id)
+                    : [...done, id],
+                )
               }
             />
           )}
@@ -179,7 +252,11 @@ function Game() {
             <GuildScreen
               weather={weather}
               encouraged={encouraged}
-              onEncourage={(name) => setEncouraged((sent) => (sent.includes(name) ? sent : [...sent, name]))}
+              onEncourage={(name) =>
+                setEncouraged((sent) =>
+                  sent.includes(name) ? sent : [...sent, name],
+                )
+              }
             />
           )}
         </ScrollView>
@@ -189,8 +266,24 @@ function Game() {
     </ThemeContext.Provider>
   )
 }
-
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  loading: { flex: 1, backgroundColor: '#f3e6b8' },
+
+  loading: {
+    flex: 1,
+    backgroundColor: '#f3e6b8',
+  },
+
+  bleButton: {
+    margin: 16,
+    padding: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#e8d9a8',
+  },
+
+  bleButtonText: {
+    fontWeight: '700',
+    fontSize: 16,
+  },
 })
