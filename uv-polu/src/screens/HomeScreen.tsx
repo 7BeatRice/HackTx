@@ -3,12 +3,14 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { BatHero } from '../components/BatHero'
 import { ChamferBox } from '../components/ChamferBox'
 import { Icon } from '../components/Icon'
+import { TrendChart } from '../components/TrendChart'
 import { WorldScene } from '../components/WorldScene'
 import {
   heroClassFor,
   reactionFor,
   weatherCopy,
   type Character,
+  type History,
   type IconName,
   type Readings,
   type Weather,
@@ -19,6 +21,7 @@ import { font, mix, useTheme } from '../theme'
 type Props = {
   weather: Weather
   readings: Readings
+  history: History
   selected: Character
   simulator: boolean
   message: number
@@ -26,7 +29,7 @@ type Props = {
   onOpenStory: () => void
 }
 
-export function HomeScreen({ weather, readings, selected, simulator, message, onRefresh, onOpenStory }: Props) {
+export function HomeScreen({ weather, readings, history, selected, simulator, message, onRefresh, onOpenStory }: Props) {
   const theme = useTheme()
   const { width, height, compact, tiny, pad } = useMetrics()
   const copy = weatherCopy[weather]
@@ -57,6 +60,8 @@ export function HomeScreen({ weather, readings, selected, simulator, message, on
   const cols = compact ? 2 : 4
   const gap = 12
   const cardW = (width - pad * 2 - gap * (cols - 1)) / cols
+  const chartCols = compact ? 1 : 2
+  const chartW = (width - pad * 2 - gap * (chartCols - 1)) / chartCols
 
   return (
     <>
@@ -171,6 +176,33 @@ export function HomeScreen({ weather, readings, selected, simulator, message, on
           ))}
         </View>
 
+        <View style={styles.trendHead}>
+          <Text style={[styles.headingKicker, { color: theme.gold }]}>WORLD TRENDS</Text>
+          <Text style={[styles.headingTitle, { color: theme.ink }]}>How the day is unfolding</Text>
+        </View>
+
+        <View style={[styles.grid, { gap }]}>
+          <TrendChart
+            title="UV Index"
+            color="#7f6cad"
+            width={chartW}
+            series={{
+              day: history.day.map((p) => ({ time: p.time, value: p.uv })),
+              week: history.week.map((p) => ({ time: p.time, value: p.uv })),
+            }}
+          />
+          <TrendChart
+            title="Air Quality"
+            color="#4e8b60"
+            width={chartW}
+            domain={[70, 100]}
+            series={{
+              day: history.day.map((p) => ({ time: p.time, value: p.air })),
+              week: history.week.map((p) => ({ time: p.time, value: p.air })),
+            }}
+          />
+        </View>
+
         <View style={styles.note}>
           <Icon name="signal" size={18} color="#6f7e6d" />
           <Text style={styles.noteText}>
@@ -267,6 +299,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
   },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  trendHead: { marginTop: 26, marginBottom: 14 },
   card: { flexDirection: 'row', alignItems: 'center', minHeight: 88 },
   iconBox: { alignItems: 'center', justifyContent: 'center', borderRadius: 13 },
   cardText: { flex: 1, minWidth: 0 },

@@ -1,5 +1,8 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
-import { AccessibilityInfo, Animated, Easing, useWindowDimensions } from 'react-native'
+import { AccessibilityInfo, Animated, Easing, Platform, useWindowDimensions } from 'react-native'
+
+/** The native animation module doesn't exist on web, so only ask for it elsewhere. */
+export const USE_NATIVE_DRIVER = Platform.OS !== 'web'
 
 /** Mirrors the prototype's `prefers-reduced-motion` rule. Provided once in App. */
 export const MotionContext = createContext(false)
@@ -39,7 +42,7 @@ export function usePingPong(duration: number, delay = 0, rest = 0.5): Animated.V
         toValue,
         duration: duration / 2,
         easing: Easing.inOut(Easing.ease),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       })
     const anim = Animated.sequence([
       Animated.delay(delay),
@@ -65,7 +68,7 @@ export function useSawtooth(duration: number, phase = 0) {
     }
     v.setValue(0)
     const anim = Animated.loop(
-      Animated.timing(v, { toValue: 1, duration, easing: Easing.linear, useNativeDriver: true }),
+      Animated.timing(v, { toValue: 1, duration, easing: Easing.linear, useNativeDriver: USE_NATIVE_DRIVER }),
     )
     anim.start()
     return () => anim.stop()

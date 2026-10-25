@@ -17,10 +17,12 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { BottomNav, NAV_HEIGHT } from './src/components/BottomNav'
 import { TopBar } from './src/components/TopBar'
 import {
+  buildHistory,
   characters,
   initialReadings,
   rollWorld,
   weatherCopy,
+  type History,
   type Readings,
   type Screen,
   type Weather,
@@ -69,6 +71,7 @@ function Game() {
   const [completedQuests, setCompletedQuests] = useState<string[]>([])
   const [encouraged, setEncouraged] = useState<string[]>([])
   const [readings, setReadings] = useState<Readings>(initialReadings)
+  const [history, setHistory] = useState<History>(() => buildHistory(initialReadings))
 
   const theme = themes[weather]
 
@@ -76,6 +79,7 @@ function Game() {
     const next = rollWorld()
     setWeather(next.weather)
     setReadings(next.readings)
+    setHistory(buildHistory(next.readings))
   }
 
   if (screen === 'characters') {
@@ -117,6 +121,7 @@ function Game() {
             <HomeScreen
               weather={weather}
               readings={readings}
+              history={history}
               selected={selected}
               simulator={simulator}
               message={message}

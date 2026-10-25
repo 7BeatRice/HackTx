@@ -18,6 +18,10 @@ export type Screen = 'home' | 'story' | 'quests' | 'guild' | 'characters'
 export type Character = { name: string; title: string; color: string; initial: string }
 export type Readings = { temp: number; uv: number; air: number; precipitation: number }
 
+export type Timeframe = 'day' | 'week'
+export type HistoryPoint = { time: string; uv: number; air: number }
+export type History = Record<Timeframe, HistoryPoint[]>
+
 export const characters: Character[] = [
   { name: 'Red Riding Hood', title: 'Woodland Wanderer', color: '#b23e4b', initial: 'R' },
   { name: 'Snow White', title: 'Forest Friend', color: '#315b8a', initial: 'S' },
@@ -111,4 +115,32 @@ export function reactionFor(weather: Weather, readings: Readings): string {
   if (weather === 'winter-storm') return 'Milo has raised his enchanted umbrella.'
   if (readings.air < 85) return 'Milo notices a haze across the kingdom.'
   return 'Milo is happy—the air feels clear and fresh.'
+}
+
+const HOUR_LABELS = ['6 AM', '9 AM', '12 PM', '3 PM', '6 PM', '9 PM']
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+/** Rough share of the day's peak UV at each of the hours above. */
+const SUN_CURVE = [0.15, 0.55, 1, 0.95, 0.5, 0.08]
+
+const round1 = (n: number) => Math.round(n * 10) / 10
+const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n))
+
+/**
+ * Simulator history for the trend charts, shaped around the current readings.
+ * Replace with real stored sensor samples when the ESP32 is connected.
+ */
+export function buildHistory(readings: Readings): History {
+  const peak = Math.max(readings.uv, 1)
+  const wobble = (amount: number) => (Math.random() - 0.5) * 2 * amount
+  const day = HOUR_LABELS.map((time, i) => ({
+    time,
+    uv: round1(clamp(peak * SUN_CURVE[i] + wobble(0.3), 0, 12)),
+    air: Math.round(clamp(readings.air + wobble(6), 70, 100)),
+  }))
+  const week = DAY_LABELS.map((time) => ({
+    time,
+    uv: round1(clamp(peak * (0.55 + Math.random() * 0.6), 0, 12)),
+    air: Math.round(clamp(readings.air + wobble(8), 70, 100)),
+  }))
+  return { day, week }
 }
