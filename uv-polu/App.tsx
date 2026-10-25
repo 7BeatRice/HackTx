@@ -259,15 +259,19 @@ function Game() {
           )}
 
           {screen === 'story' && (
-            <StoryScreen
-              weather={weather}
-              readings={readings}
-              selected={selected}
-              storyChoice={storyChoice}
-              onChoose={setStoryChoice}
-              onContinue={() => setScreen('quests')}
-            />
-          )}
+  <StoryScreen
+    weather={weather}
+    readings={readings}
+    selected={selected}
+    story={story}
+    loading={storyLoading}
+    chapter={Math.floor(completedQuests.length / 3) + 1}
+    activity={ctx.activity.level}
+    storyChoice={storyChoice}
+    onChoose={setStoryChoice}
+    onContinue={() => setScreen('quests')}
+  />
+)}
 
           {screen === 'quests' && (
             <QuestsScreen
