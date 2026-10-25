@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import Svg, { Path, Polygon } from 'react-native-svg'
 import { ChamferBox } from '../components/ChamferBox'
 import { Icon } from '../components/Icon'
-import { storyTitleFor, weatherCopy, type Character, type Readings, type Weather } from '../data'
+import { fahrenheit, storyTitleFor, weatherCopy, type Character, type Readings, type Weather } from '../data'
 import { useMetrics } from '../hooks'
 import { font, mix, storySky, useTheme } from '../theme'
 
@@ -34,7 +34,7 @@ export function StoryScreen({ weather, readings, selected, storyChoice, onChoose
   const headingSize = Math.min(46, Math.max(28, width * 0.05))
 
   const firstLetter = copy.quest.slice(0, 1)
-  const restOfIntro = `${copy.quest.slice(1)} The air was ${readings.temp} degrees, and every leaf in ${copy.kingdom} carried a message meant only for ${selected.name}.`
+  const restOfIntro = `${copy.quest.slice(1)} The air was ${fahrenheit(readings.temp)} degrees, and every leaf in ${copy.kingdom} carried a message meant only for ${selected.name}.`
 
   return (
     <View style={[styles.page, { paddingHorizontal: pad }]}>
@@ -86,7 +86,7 @@ export function StoryScreen({ weather, readings, selected, storyChoice, onChoose
         <View style={[styles.conditions, compact && styles.conditionsCompact]}>
           <View style={styles.cond}>
             <Icon name="sun" size={16} color="#29382d" />
-            <Text style={styles.condText}>{readings.temp}°</Text>
+            <Text style={styles.condText}>{fahrenheit(readings.temp)}°F</Text>
           </View>
           <View style={styles.cond}>
             <Icon name="droplet" size={16} color="#29382d" />

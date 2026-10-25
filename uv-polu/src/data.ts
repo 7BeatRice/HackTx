@@ -67,6 +67,9 @@ export const weatherCopy: Record<Weather, { kingdom: string; condition: string; 
 
 export const initialReadings: Readings = { temp: 24, uv: 3, air: 92, precipitation: 12 }
 
+/** Readings are stored in °C (the kingdom thresholds use it); show °F to players. */
+export const fahrenheit = (celsius: number) => Math.round((celsius * 9) / 5 + 32)
+
 /** Which kingdom a temperature (°C) and precipitation chance (%) belong to. */
 export function weatherFor(temp: number, precipitation: number): Weather {
   return temp >= 16

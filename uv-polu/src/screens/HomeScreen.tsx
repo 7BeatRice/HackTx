@@ -6,6 +6,7 @@ import { Icon } from '../components/Icon'
 import { TrendChart } from '../components/TrendChart'
 import { WorldScene } from '../components/WorldScene'
 import {
+  fahrenheit,
   heroClassFor,
   reactionFor,
   weatherCopy,
@@ -49,7 +50,7 @@ export function HomeScreen({ weather, readings, history, selected, simulator, me
   const reaction = reactionFor(weather, readings)
 
   const cards: { key: string; icon: IconName; tint: string; bg: string; label: string; value: string; note: string }[] = [
-    { key: 'temp', icon: 'sun', tint: '#b67d1d', bg: '#fff3d4', label: 'Temperature', value: `${readings.temp}°`, note: 'Warm & gentle' },
+    { key: 'temp', icon: 'sun', tint: '#b67d1d', bg: '#fff3d4', label: 'Temperature', value: `${fahrenheit(readings.temp)}°F`, note: 'Warm & gentle' },
     { key: 'uv', icon: 'wind', tint: '#7f6cad', bg: '#f0eafa', label: 'UV Index', value: `${readings.uv}`, note: 'Low today' },
     { key: 'air', icon: 'leaf', tint: '#4e8b60', bg: '#e5f3e7', label: 'Air Quality', value: `${readings.air}`, note: 'Fresh air' },
     {
